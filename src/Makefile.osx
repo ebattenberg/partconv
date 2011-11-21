@@ -1,0 +1,116 @@
+CUDA = 0
+GCCVer = 4.2
+
+CC := gcc-$(GCCVer) -std=c99 
+CXX := g++-$(GCCVer)
+
+LD = ${CXX}
+DEFS = -D_PORTAUDIO_ 
+
+DBG = -g -Wall
+OPT = -O3 -msse3 #-fno-builtin
+BASEFLAGS = $(DBG) $(OPT) $(DEFS)
+CFLAGS= $(BASEFLAGS)
+	
+
+
+cclib_paths = -L/usr/lib -L/usr/local/lib/x86_64
+LDFLAGS = -bundle -flat_namespace -undefined suppress
+
+CLIBS = -lpthread -lsndfile -lfftw3f -lm -lportaudio
+
+TARGETS = pcRTMax pcRTMulti
+OBJECTS = buffers.o sndtools.o partconv.o partconvMulti.o #runLevel.o #alsa.o threading.o
+
+PIC_OBJS = $(patsubst %.o,%.pic.o,$(OBJECTS))
+INCLUDES = buffers.h sndtools.h partconv.h partconvMulti.h 
+
+
+TESTS = testCMult testFFTW testMutex testCondvar testSignaling
+PYTHON_TARGET = _partconv.so
+PYTHON_STUFF = partconv_wrap.cxx partconv.py partconv.pyc
+
+cinc_paths := -I/usr/local/include/python2.7 -I/usr/local/lib/python2.7
+
+lib_paths   := $(cclib_paths) $(clib_paths)
+libraries   := $(CLIBS) 
+# --------------------------------
+
+
+some: ${TARGETS}
+
+
+all: some tests python
+
+python: ${PYTHON_TARGET}
+
+tests: ${TESTS}
+
+pcRT: pcRT.o ${OBJECTS} ${INCLUDES}
+	${CXX} ${CFLAGS} -o $@ $@.o ${OBJECTS} $(lib_paths) ${libraries}
+
+pcRTMulti: pcRTMulti.o ${OBJECTS} ${INCLUDES}
+	${CXX} ${CFLAGS} -o $@ $@.o ${OBJECTS} $(lib_paths) ${libraries}
+
+pcRTMax: pcRTMax.o ${OBJECTS} ${INCLUDES}
+	${CXX} ${CFLAGS} -o $@ $@.o ${OBJECTS} $(lib_paths) ${libraries}
+
+convolve: convolve.o ${OBJECTS} ${INCLUDES}
+	${CXX} ${CFLAGS} -o $@ $@.o ${OBJECTS} $(lib_paths) ${libraries}
+
+
+_partconv.so: partconv_wrap.pic.o ${PIC_OBJS} ${INCLUDES}
+	${LD} ${LDFLAGS} -o _partconv.so partconv_wrap.pic.o ${PIC_OBJS} ${lib_paths} ${libraries}
+
+complex_test: complex_test.o
+	${CC} ${CFLAGS} -o $@ $@.o $(lib_paths) ${libraries}
+
+testCMult: testCMult.o complexC.o
+	${CXX} ${CFLAGS} -o $@ $^ $(lib_paths) ${libraries}
+
+testFFTW: testFFTW.o
+	${CXX} ${CFLAGS} -o $@ $@.o $(lib_paths) ${libraries}
+
+testMutex: testMutex.o
+	${CXX} ${CFLAGS} -o $@ $@.o $(lib_paths) ${libraries}
+
+testCondvar: testCondvar.o
+	${CXX} ${CFLAGS} -o $@ $@.o $(lib_paths) ${libraries}
+
+testSignaling: testSignaling.o
+	${CXX} ${CFLAGS} -o $@ $@.o $(lib_paths) ${libraries}
+
+
+
+%.o: %.c ${INCLUDES}
+	${CC} ${CFLAGS} -c $< $(cinc_paths)
+
+
+%.o: %.cpp ${INCLUDES}
+	${CXX} ${CFLAGS} -c $< $(cinc_paths)
+
+
+
+partconv_wrap.cxx: partconv.i partconv.h
+	swig -python -c++ partconv.i
+
+%.pic.o: %.cxx ${INCLUDES}
+	${CXX} ${PICFLAGS} ${CFLAGS} -c $< $(cinc_paths) -o $@
+
+%.pic.o: %.c ${INCLUDES}
+	${CC} ${PICFLAGS} ${CFLAGS} -c $< $(cinc_paths) -o $@
+
+%.pic.o: %.cpp ${INCLUDES}
+	${CXX} ${PICFLAGS} ${CFLAGS} -c $< $(cinc_paths) -o $@
+
+
+%.s: %.cpp
+	${CXX} ${CFLAGS} -c  -Wa,-ahl=$@ $<
+
+%.s: %.c
+	${CC} ${CFLAGS} -c -g -Wa,-ahl=$@ $<
+
+
+clean:
+	rm -f *.bin *.txt *.o *.wav ${TARGETS} ${PYTHON_STUFF} ${TESTS} ${PYTHON_TARGET}
+

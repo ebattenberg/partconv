@@ -1,0 +1,1 @@
+You need to run "export OSTYPE" in order for the Makefile to detect your OS
